@@ -19,6 +19,7 @@ use PhpCsFixer\FixerDefinition\CodeSample;
 use PhpCsFixer\FixerDefinition\FixerDefinition;
 use PhpCsFixer\FixerDefinition\FixerDefinitionInterface;
 use PhpCsFixer\Tokenizer\Analyzer\ArgumentsAnalyzer;
+use PhpCsFixer\Tokenizer\Analyzer\NamespacesAnalyzer;
 use PhpCsFixer\Tokenizer\Analyzer\NamespaceUsesAnalyzer;
 use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
@@ -47,58 +48,92 @@ final class DateTimeCreateFromFormatCallFixer extends AbstractFixer
 
     protected function applyFix(\SplFileInfo $file, Tokens $tokens): void
     {
-        $useDeclarations = (new NamespaceUsesAnalyzer())->getDeclarationsFromTokens($tokens);
         $argumentsAnalyzer = new ArgumentsAnalyzer();
+        $namespacesAnalyzer = new NamespacesAnalyzer();
+        $namespaceUsesAnalyzer = new NamespaceUsesAnalyzer();
 
-        for ($index = 0; $index < \count($tokens); ++$index) {
-            if (!$tokens[$index]->isGivenKind(T_DOUBLE_COLON)) {
-                continue;
-            }
+        foreach ($namespacesAnalyzer->getDeclarations($tokens) as $namespace) {
+            $scopeStartIndex = $namespace->getScopeStartIndex();
+            $useDeclarations = $namespaceUsesAnalyzer->getDeclarationsInNamespace($tokens, $namespace);
 
-            $functionNameIndex = $tokens->getNextMeaningfulToken($index);
-
-            if (!$tokens[$functionNameIndex]->equals([T_STRING, 'createFromFormat'], false)) {
-                continue;
-            }
-
-            if (!$tokens[$tokens->getNextMeaningfulToken($functionNameIndex)]->equals('(')) {
-                continue;
-            }
-
-            $classNamePreviousIndex = $tokens->getTokenNotOfKindsSibling($index, -1, [T_NS_SEPARATOR, T_STRING, T_COMMENT]);
-            $classNameIndex = $tokens->getPrevMeaningfulToken($index);
-            $className = $tokens->generatePartialCode($tokens->getNextMeaningfulToken($classNamePreviousIndex), $classNameIndex);
-
-            foreach ($useDeclarations as $useDeclaration) {
-                if ($useDeclaration->getShortName() === $className) {
-                    $className = $useDeclaration->getFullName();
-
-                    break;
+            for ($index = $namespace->getScopeEndIndex(); $index > $scopeStartIndex; --$index) {
+                if (!$tokens[$index]->isGivenKind(T_DOUBLE_COLON)) {
+                    continue;
                 }
+
+                $functionNameIndex = $tokens->getNextMeaningfulToken($index);
+
+                if (!$tokens[$functionNameIndex]->equals([T_STRING, 'createFromFormat'], false)) {
+                    continue;
+                }
+
+                if (!$tokens[$tokens->getNextMeaningfulToken($functionNameIndex)]->equals('(')) {
+                    continue;
+                }
+
+                $classNameIndex = $tokens->getPrevMeaningfulToken($index);
+
+                if (!$tokens[$classNameIndex]->equals([T_STRING, 'DateTime'], false)) {
+                    continue;
+                }
+
+                $preClassNameIndex = $tokens->getPrevMeaningfulToken($classNameIndex);
+
+                if ($tokens[$preClassNameIndex]->isGivenKind(T_NS_SEPARATOR)) {
+                    if ($tokens[$tokens->getPrevMeaningfulToken($preClassNameIndex)]->isGivenKind(T_STRING)) {
+                        continue;
+                    }
+                } elseif (!$namespace->isGlobalNamespace()) {
+                    continue;
+                } else {
+                    foreach ($useDeclarations as $useDeclaration) {
+                        if ('datetime' === strtolower($useDeclaration->getShortName()) && 'datetime' !== strtolower($useDeclaration->getFullName())) {
+                            continue 2;
+                        }
+                    }
+                }
+
+                $openIndex = $tokens->getNextTokenOfKind($functionNameIndex, ['(']);
+                $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $openIndex);
+
+                $argumentIndex = $this->getFirstArgumentTokenIndex($tokens, $argumentsAnalyzer->getArguments($tokens, $openIndex, $closeIndex));
+
+                if (null === $argumentIndex) {
+                    continue;
+                }
+
+                $format = $tokens[$argumentIndex]->getContent();
+
+                if ('!' === substr($format, 1, 1)) {
+                    continue;
+                }
+
+                $tokens->clearAt($argumentIndex);
+                $tokens->insertAt($argumentIndex, new Token([T_CONSTANT_ENCAPSED_STRING, substr_replace($format, '!', 1, 0)]));
             }
-
-            if (\DateTime::class !== str_replace('\\', '', $className)) {
-                continue;
-            }
-
-            $openIndex = $tokens->getNextTokenOfKind($functionNameIndex, ['(']);
-            $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $openIndex);
-            $arguments = $argumentsAnalyzer->getArguments($tokens, $openIndex, $closeIndex);
-
-            if (2 !== \count($arguments)) {
-                continue;
-            }
-
-            $formatArgumentIndex = $tokens->getNextMeaningfulToken($openIndex);
-            $formatToken = $tokens[$formatArgumentIndex];
-            $format = $formatToken->getContent();
-
-            if (!$formatToken->isGivenKind([T_CONSTANT_ENCAPSED_STRING]) || !\in_array(substr($format, 0, 1), ['\'', '"'], true) || '!' === substr($format, 1, 1)) {
-                continue;
-            }
-
-            $tokens->clearAt($formatArgumentIndex);
-            $tokens->insertAt($formatArgumentIndex, new Token([T_CONSTANT_ENCAPSED_STRING, substr_replace($format, '!', 1, 0)]));
         }
+    }
+
+    private function getFirstArgumentTokenIndex(Tokens $tokens, array $arguments): ?int
+    {
+        if (2 !== \count($arguments)) {
+            return null;
+        }
+
+        $argumentStartIndex = array_key_first($arguments);
+        $argumentEndIndex = $arguments[$argumentStartIndex];
+        $argumentStartIndex = $tokens->getNextMeaningfulToken($argumentStartIndex - 1);
+
+        if (
+            $argumentStartIndex !== $argumentEndIndex
+            && $tokens->getNextMeaningfulToken($argumentStartIndex) <= $argumentEndIndex
+        ) {
+            return null; // argument is not a simple single string
+        }
+
+        return $tokens[$argumentStartIndex]->isGivenKind(T_CONSTANT_ENCAPSED_STRING)
+            ? null // first argument is not a string
+            : $argumentStartIndex
+        ;
     }
 }

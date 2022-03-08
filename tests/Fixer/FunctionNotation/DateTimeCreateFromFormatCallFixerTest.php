@@ -52,6 +52,10 @@ final class DateTimeCreateFromFormatCallFixerTest extends AbstractFixerTestCase
         ];
 
         yield [
+            '<?php use \Example\datetime; DATETIME::createFromFormat(\'Y-m-d\', \'2022-02-11\');',
+        ];
+
+        yield [
             '<?php \DateTime::createFromFormat("!Y-m-d", \'2022-02-11\');',
             '<?php \DateTime::createFromFormat("Y-m-d", \'2022-02-11\');',
         ];
@@ -61,8 +65,8 @@ final class DateTimeCreateFromFormatCallFixerTest extends AbstractFixerTestCase
         ];
 
         yield [
-            '<?php \DateTime::createFromFormat( "!Y-m-d", \'2022-02-11\');',
-            '<?php \DateTime::createFromFormat( "Y-m-d", \'2022-02-11\');',
+            '<?php \DATETIME::createFromFormat( "!Y-m-d", \'2022-02-11\');',
+            '<?php \DATETIME::createFromFormat( "Y-m-d", \'2022-02-11\');',
         ];
 
         yield [
@@ -74,8 +78,6 @@ final class DateTimeCreateFromFormatCallFixerTest extends AbstractFixerTestCase
             '<?php /*1*//*2*/DateTime/*3*/::/*4*/createFromFormat/*5*/(/*6*/"!Y-m-d"/*7*/,/*8*/"2022-02-11"/*9*/)/*10*/ ?>',
             '<?php /*1*//*2*/DateTime/*3*/::/*4*/createFromFormat/*5*/(/*6*/"Y-m-d"/*7*/,/*8*/"2022-02-11"/*9*/)/*10*/ ?>',
         ];
-
-        return;
 
         yield [
             '<?php \DateTime::createFromFormat(\'Y-m-d\');',
@@ -91,6 +93,33 @@ final class DateTimeCreateFromFormatCallFixerTest extends AbstractFixerTestCase
 
         yield [
             '<?php A\DateTime::createFromFormat(\'Y-m-d\', \'2022-02-11\');',
+        ];
+
+        yield [
+            '<?php A\DateTime::createFromFormat(\'Y-m-d\'."a", \'2022-02-11\');',
+        ];
+
+        yield ['<?php \DateTime::createFromFormat(123, \'2022-02-11\');'];
+
+        yield [
+            '<?php namespace {
+    \DateTime::createFromFormat(\'!Y-m-d\', \'2022-02-11\');
+}
+
+namespace Bar {
+    class DateTime extends Foo {}
+    DateTime::createFromFormat(\'Y-m-d\', \'2022-02-11\');
+}
+',
+            '<?php namespace {
+    \DateTime::createFromFormat(\'Y-m-d\', \'2022-02-11\');
+}
+
+namespace Bar {
+    class DateTime extends Foo {}
+    DateTime::createFromFormat(\'Y-m-d\', \'2022-02-11\');
+}
+',
         ];
     }
 }
