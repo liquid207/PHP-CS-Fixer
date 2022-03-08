@@ -18,9 +18,9 @@ use PhpCsFixer\Tests\Test\AbstractFixerTestCase;
 
 /**
  * @internal
- * @covers \PhpCsFixer\Fixer\FunctionNotation\CreateFromFormatCallFixer
+ * @covers \PhpCsFixer\Fixer\FunctionNotation\DateTimeCreateFromFormatCallFixer
  */
-final class CreateFromFormatCallFixerTest extends AbstractFixerTestCase
+final class DateTimeCreateFromFormatCallFixerTest extends AbstractFixerTestCase
 {
     /**
      * @dataProvider provideFixCases
@@ -66,8 +66,31 @@ final class CreateFromFormatCallFixerTest extends AbstractFixerTestCase
         ];
 
         yield [
-            '<?php \DateTime::createFromFormat(/* aaa */ "!Y-m-d", \'2022-02-11\');',
-            '<?php \DateTime::createFromFormat(/* aaa */ "Y-m-d", \'2022-02-11\');',
+            '<?php \DateTime::createFromFormat(/* aaa */ \'!Y-m-d\', \'2022-02-11\');',
+            '<?php \DateTime::createFromFormat(/* aaa */ \'Y-m-d\', \'2022-02-11\');',
+        ];
+
+        yield [
+            '<?php /*1*//*2*/DateTime/*3*/::/*4*/createFromFormat/*5*/(/*6*/"!Y-m-d"/*7*/,/*8*/"2022-02-11"/*9*/)/*10*/ ?>',
+            '<?php /*1*//*2*/DateTime/*3*/::/*4*/createFromFormat/*5*/(/*6*/"Y-m-d"/*7*/,/*8*/"2022-02-11"/*9*/)/*10*/ ?>',
+        ];
+
+        return;
+
+        yield [
+            '<?php \DateTime::createFromFormat(\'Y-m-d\');',
+        ];
+
+        yield [
+            '<?php \DateTime::createFromFormat($a, $b);',
+        ];
+
+        yield [
+            '<?php \DateTime::createFromFormat(\'Y-m-d\', $b, $c);',
+        ];
+
+        yield [
+            '<?php A\DateTime::createFromFormat(\'Y-m-d\', \'2022-02-11\');',
         ];
     }
 }
