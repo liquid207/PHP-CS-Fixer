@@ -23,7 +23,7 @@ use PhpCsFixer\Tokenizer\Analyzer\NamespaceUsesAnalyzer;
 use PhpCsFixer\Tokenizer\Token;
 use PhpCsFixer\Tokenizer\Tokens;
 
-final class CreateFromFormatCallFixer extends AbstractFixer
+final class DateTimeCreateFromFormatCallFixer extends AbstractFixer
 {
     public function getDefinition(): FixerDefinitionInterface
     {
@@ -33,10 +33,10 @@ final class CreateFromFormatCallFixer extends AbstractFixer
                 new CodeSample("<?php \\DateTime::createFromFormat('Y-m-d', '2022-02-11');\n"),
             ],
             "Consider this code:
-                `DateTime::createFromFormat('Y-m-d', '2022-02-11')`.
-                What value will be return? '2022-01-11 00:00:00.0'? No, actual return value has 'H:i:s' section like '2022-02-11 16:55:37.0'.
-                Change 'Y-m-d' to '!Y-m-d', return value will be '2022-01-11 00:00:00.0'.
-                So add `!` to format string will make return value more intuitive."
+    `DateTime::createFromFormat('Y-m-d', '2022-02-11')`.
+    What value will be returned? '2022-01-11 00:00:00.0'? No, actual return value has 'H:i:s' section like '2022-02-11 16:55:37.0'.
+    Change 'Y-m-d' to '!Y-m-d', return value will be '2022-01-11 00:00:00.0'.
+    So, adding `!` to format string will make return value more intuitive."
         );
     }
 
@@ -55,19 +55,19 @@ final class CreateFromFormatCallFixer extends AbstractFixer
                 continue;
             }
 
-            $functionNameIndex = $index + 1;
+            $functionNameIndex = $tokens->getNextMeaningfulToken($index);
 
             if (!$tokens[$functionNameIndex]->equals([T_STRING, 'createFromFormat'], false)) {
                 continue;
             }
 
-            if (!$tokens[$functionNameIndex + 1]->equals('(')) {
+            if (!$tokens[$tokens->getNextMeaningfulToken($functionNameIndex)]->equals('(')) {
                 continue;
             }
 
-            $classNamePreviousIndex = $tokens->getTokenNotOfKindsSibling($functionNameIndex, -1, [T_DOUBLE_COLON, T_NS_SEPARATOR, T_STRING]);
-            $classNameIndex = $index - 1;
-            $className = $tokens->generatePartialCode($classNamePreviousIndex + 1, $classNameIndex);
+            $classNamePreviousIndex = $tokens->getTokenNotOfKindsSibling($index, -1, [T_NS_SEPARATOR, T_STRING, T_COMMENT]);
+            $classNameIndex = $tokens->getPrevMeaningfulToken($index);
+            $className = $tokens->generatePartialCode($tokens->getNextMeaningfulToken($classNamePreviousIndex), $classNameIndex);
 
             foreach ($useDeclarations as $useDeclaration) {
                 if ($useDeclaration->getShortName() === $className) {
@@ -89,10 +89,11 @@ final class CreateFromFormatCallFixer extends AbstractFixer
                 continue;
             }
 
-            $formatArgumentIndex = array_values($arguments)[0];
-            $format = $tokens[$formatArgumentIndex]->getContent();
+            $formatArgumentIndex = $tokens->getNextMeaningfulToken($openIndex);
+            $formatToken = $tokens[$formatArgumentIndex];
+            $format = $formatToken->getContent();
 
-            if (!\in_array(substr($format, 0, 1), ['\'', '"'], true) || '!' === substr($format, 1, 1)) {
+            if (!$formatToken->isGivenKind([T_CONSTANT_ENCAPSED_STRING]) || !\in_array(substr($format, 0, 1), ['\'', '"'], true) || '!' === substr($format, 1, 1)) {
                 continue;
             }
 
